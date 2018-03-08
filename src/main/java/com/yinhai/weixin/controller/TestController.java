@@ -3,6 +3,7 @@ package com.yinhai.weixin.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
@@ -12,18 +13,19 @@ import javax.servlet.http.HttpSession;
  */
 @Controller
 public class TestController {
-    @RequestMapping(value = "/page/get")
-    @ResponseBody
-    public  String test(HttpSession session,String log){
 
+  //  @ResponseBody
+    @RequestMapping(value = "/page/get")
+    public  ModelAndView test(HttpSession session,String log){
         System.out.println(session.getAttribute("name"));
-        return "张汉江";
+        ModelAndView mv=new ModelAndView("hospital/index");
+        //ModelAndView mv=new ModelAndView("index");
+        return  mv;
     }
 
     @RequestMapping(value = "/view/post")
-    @ResponseBody
-    public  String post(){
+    public  ModelAndView post(){
         System.out.println("我是post");
-        return "post";
+        return new ModelAndView("home");
     }
 }
