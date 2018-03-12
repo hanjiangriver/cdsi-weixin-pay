@@ -1,10 +1,21 @@
 package com.yinhai.weixin.service;
 
+import com.yinhai.weixin.configuration.AppConfig;
+import com.yinhai.weixin.configuration.MessageConfig;
+import com.yinhai.weixin.exception.AppException;
+import com.yinhai.weixin.model.message.Article;
+import com.yinhai.weixin.model.message.BasicMessage;
+import com.yinhai.weixin.model.message.NewsMessage;
+import com.yinhai.weixin.model.message.TextMessage;
+import com.yinhai.weixin.utils.LogUtil;
+import com.yinhai.weixin.utils.MessageUtil;
 import com.yinhai.weixin.utils.XmlUtil;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -16,6 +27,8 @@ public class MessageService {
 
     //处理传过来的消息
     public String processReq(HttpServletRequest request){
+        TextMessage textMessage=null;
+        NewsMessage newsMessage=null;
         String resMessage=null;//响应的消息格式
         try {
             // 默认返回的文本消息内容
@@ -28,150 +41,84 @@ public class MessageService {
             String toUserName = resMap.get("ToUserName");
             // 消息类型
             String msgType = resMap.get("MsgType");
-
             //消息内容
             String content=resMap.get("Content");
-
             //媒体类型id
             String MediaId=resMap.get("MediaId");
             // 回复文本消息
-            TextMessage textMessage = new TextMessage();
-            textMessage.setToUserName(fromUserName);
-            textMessage.setFromUserName(toUserName);
-            textMessage.setCreateTime(new Date().getTime());
-            textMessage.setContent(respContent);
+            BasicMessage message=new BasicMessage();
+            message.setToUserName(fromUserName);//发给谁
+            message.setFromUserName(toUserName);//谁发的
+            message.setCreateTime(new Date().getTime());//回复时间
             //  textMessage.setMsgType("<![CDATA[text]]>");
             // textMessage.setFuncFlag(0);
 
-            // 文本消息
-            if (msgType.equalsIgnoreCase(MessageType.TEXT)&&"你好".endsWith(content)) {
-                respContent ="听说你昨天去旅游了，肯定拍了照片吧，很想看一看呢，如果你不发照片我会一直重复这句话的,hahaha!";
-                textMessage.setContent(respContent);
+            // 如果接收的是文本消息 则发送图文消息
+            if (msgType.equalsIgnoreCase(MessageConfig.REQ_MESSAGE_TYPE_TEXT)) {
+                newsMessage=new NewsMessage();
+                newsMessage.setFromUserName(message.getFromUserName());
+                newsMessage.setToUserName(message.getToUserName());
+                newsMessage.setCreateTime(message.getCreateTime());
+                newsMessage.setArticleCount(2);
+                newsMessage.setArticles(getArticles());
+                resMessage= MessageUtil.newsMessageToXml(newsMessage);
+
             }
-            // 图片消息
-            else if (msgType.equalsIgnoreCase(MessageType.IMAGE)) {
-                respContent = "好看！";
-                textMessage.setMediaId(MediaId);
-            }
-            // 地理位置消息
-            else if (msgType.equalsIgnoreCase(MessageType.LOCATION)) {
-                respContent = "原来你在这里，好想去看看！";
-                textMessage.setContent(respContent);
-            }
-            // 链接消息
-            else if (msgType.equalsIgnoreCase(MessageType.LINK)) {
-                respContent = "您发送的是链接消息！";
-            }
-            // 音频消息
-            else if (msgType.equalsIgnoreCase(MessageType.VOICE)) {
-                respContent = "终于听到你的声音了！";
-                textMessage.setContent(respContent);
-            }
+
             // 事件推送
-            else if (msgType.equalsIgnoreCase(MessageType.EVENT)) {
+            else if (msgType.equalsIgnoreCase(MessageConfig.REQ_MESSAGE_TYPE_EVENT)) {
                 // 事件类型
                 String eventType = resMap.get("Event");
                 // 订阅
-                if (eventType.equalsIgnoreCase( MessageType.SUBSCRIBE)) {
+                if (eventType.equalsIgnoreCase( MessageConfig.EVENT_TYPE_SUBSCRIBE)) {
+                    textMessage=new TextMessage();
+                    textMessage.setFromUserName(message.getFromUserName());
+                    textMessage.setToUserName(message.getToUserName());
+                    textMessage.setCreateTime(message.getCreateTime());
                     respContent = "谢谢您的关注！目前该公众号正在开发中，敬请期待";
                     textMessage.setContent(respContent);
+                    resMessage=MessageUtil.textMessageToXml(textMessage);
                 }
                 // 取消订阅
-                else if (eventType.equalsIgnoreCase( MessageType.UNSUBSCRIBE)) {
+                else if (eventType.equalsIgnoreCase( MessageConfig.EVENT_TYPE_UNSUBSCRIBE)) {
                     // TODO 取消订阅后用户再收不到公众号发送的消息，因此不需要回复消息
                     respContent = "";
                 }
                 // 自定义菜单点击事件
-                else if (eventType.equalsIgnoreCase( MessageType.CLICK)) {
+                else if (eventType.equalsIgnoreCase( MessageConfig.EVENT_TYPE_CLICK)) {
                     // 事件KEY值，与创建自定义菜单时指定的KEY值对应
                     String eventKey = resMap.get("EventKey");
-
                     if (eventKey.equals("11")) {
                         respContent = "天气预报菜单项被点击！";
                     }
                 }
             }
-            if (msgType.equalsIgnoreCase(MessageType.IMAGE)) {
-                resMessage=String.format(Config.imageMessage,
-                        textMessage.getToUserName(),textMessage.getFromUserName(),textMessage.getCreateTime(),textMessage.getMediaId());
-            }else if(msgType.equalsIgnoreCase(MessageType.TEXT)&&"图文".endsWith(content)){
-                resMessage=buildNewsMessage(resMap);
-            }
-            else{
-                resMessage=String.format(Config.contentMessage,
-                        textMessage.getToUserName(),textMessage.getFromUserName(),textMessage.getCreateTime(),textMessage.getContent());
-            }
-            //  textMessage.setContent(respContent);
-            //  resMessage= XmlUtil.getXMLFromMap(XmlUtil.beanToMap(textMessage));
-            //  resMessage=String.format(Config.contentMessage,
-            //        textMessage.getToUserName(),textMessage.getFromUserName(),textMessage.getCreateTime(),textMessage.getContent());
-            logger.info("回复的消息resMessage:"+resMessage);
+            LogUtil.show(LogUtil.Level.INFO,"回复的消息resMessage:"+resMessage);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            LogUtil.show(LogUtil.Level.INFO,"生成消息格式或解析消息发生错误",e);
+            throw  new AppException("生成消息格式或解析消息发生错误");
         }
         return resMessage ;
 
 
     }
 
-    /**
-     * 构造图文消息
-     * @param map 封装了解析结果的Map
-     * @return 图文消息XML字符串
-     */
-    private  String buildNewsMessage(Map<String, String> map) {
-        String fromUserName = map.get("FromUserName");
-        // 开发者微信号
-        String toUserName = map.get("ToUserName");
-        NewsMessage item=new NewsMessage();
-        item.setTitle("挂号不排队——预约挂号");
-        /*item.setDescription("工欲善其事，必先利其器。要做微信公众号开发，那么要先准备好两样必不可少的东西：\n" +
-                "\n" +
-                "　　1、要有一个用来测试的公众号。\n" +
-                "\n" +
-                "　　2、用来调式代码的开发环境");*/
-        // item.setPicUrl("http://images2015.cnblogs.com/blog/289233/201601/289233-20160121164317343-2145023644.png");
-        item.setPicUrl("http://img2.imgtn.bdimg.com/it/u=2360079417,4049234709&fm=27&gp=0.jpg");
-        item.setUrl(Config.gh_81gk_url);
-        // item.setUrl("http://www.cnblogs.com/xdp-gacl/p/5149171.html");
-
-        String itemContent1 = buildSingleItem(item);
-
-        NewsMessage item2 = new NewsMessage();
-        item2.setTitle("诊间快速付——诊间支付");
-        // item2.setDescription("微信服务器就相当于一个转发服务器，终端（手机、Pad等）发起请求至微信服务器，微信服务器然后将请求转发给我们的应用服务器。应用服务器处理完毕后，将响应数据回发给微信服务器，微信服务器再将具体响应信息回复到微信App终端。");
-        item2.setPicUrl("");
-        item2.setUrl(Config.zj_81gk_url);
-        String itemContent2 = buildSingleItem(item2);
-
-
-        String content = String.format("<xml>\n" +
-                "<ToUserName><![CDATA[%s]]></ToUserName>\n" +
-                "<FromUserName><![CDATA[%s]]></FromUserName>\n" +
-                "<CreateTime>%s</CreateTime>\n" +
-                "<MsgType><![CDATA[news]]></MsgType>\n" +
-                "<ArticleCount>%s</ArticleCount>\n" +
-                "<Articles>\n" + "%s" +
-                "</Articles>\n" +
-                "</xml> ", fromUserName, toUserName, new Date().getTime(), 2, itemContent1 + itemContent2);
-        return content;
-
+    //得到Articles
+    private List<Article> getArticles(){
+        List<Article> articles=new ArrayList<>();
+        articles.add(getArticle("挂号不排队——预约挂号","http://img2.imgtn.bdimg.com/it/u=2360079417,4049234709&fm=27&gp=0.jpg", AppConfig.gh_81gk_url,""));
+        articles.add(getArticle("诊间快速付——诊间支付","", AppConfig.zj_81gk_url,""));
+        return articles;
+    }
+    //得到Article
+    private Article getArticle(String title, String picUrl,String url,String description){
+       Article article=new Article();
+       article.setDescription(description);
+       article.setPicUrl(picUrl);
+       article.setTitle(title);
+       article.setUrl(url);
+       return article;
     }
 
-    /**
-     * 生成图文消息的一条记录
-     *
-     * @param item
-     * @return
-     */
-    private  String buildSingleItem(NewsMessage item) {
-        String itemContent = String.format("<item>\n" +
-                "<Title><![CDATA[%s]]></Title> \n" +
-                "<Description><![CDATA[%s]]></Description>\n" +
-                "<PicUrl><![CDATA[%s]]></PicUrl>\n" +
-                "<Url><![CDATA[%s]]></Url>\n" +
-                "</item>", item.getTitle(), item.getDescription(), item.getPicUrl(), item.getUrl());
-        return itemContent;
-    }
 }
